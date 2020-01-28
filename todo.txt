@@ -1,0 +1,3 @@
+heat dynamics, instead keep track of energy of thermalised electrons?
+ohmic transport
+automatic testing of stability with regards to discretisation settings: sliceLength and dt
