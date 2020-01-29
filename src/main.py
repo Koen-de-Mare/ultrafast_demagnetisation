@@ -11,9 +11,8 @@ system = system.advance(25.0)
 system.plot()
 system = system.advance(25.0)
 system.plot()
-system = system.advance(25.0)
-system.plot()
-system = system.advance(25.0)
-system.plot()
-system = system.advance(25.0)
+
+print("long time")
+
+system = system.advance(2000.0)
 system.plot()

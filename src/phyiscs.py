@@ -15,7 +15,7 @@ penetration_depth: float = 1.0  # (nm)
 E_nt: float = 1.0  # (eV)
 v_fermi: float = 0.1  # (nm/fs)
 tau_ee: float = 50.0  # (fs)
-
+alpha: float = 1.645  # related to heat capacity of thermal electrons (1)
 
 class ExcitedElectron:
     def __init__(self):
@@ -33,15 +33,19 @@ class ElectronState:
 
         self.excitedList: list = []
 
-    def plot(self):
-        steps = [x * self.sliceLength for x in range(0, self.num_slices)]
-
+    def excited_density(self):
         excited_per_slice = [0] * self.num_slices
         for i in range(len(self.excitedList)):
             n = math.floor(self.excitedList[i].z / self.sliceLength)
             excited_per_slice[n] += 1
 
         excited_density = list(map((lambda x: x / (Ds * self.sliceLength)), excited_per_slice))
+
+        return excited_density
+
+    def plot(self):
+        steps = [x * self.sliceLength for x in range(0, self.num_slices)]
+        excited_density = self.excited_density()
 
         plt.plot(steps, self.muList, steps, excited_density)
         plt.ylabel("mu")
@@ -65,12 +69,12 @@ class ElectronState:
 
         return result
 
-    def advance(self, time: float):
+    def advance(self, time: object, power: object):
         dt: float = 0.5
         accumulator = self
 
         for _i in range(math.floor(time / dt)):
-            accumulator = accumulator.step(dt, 0.0)
+            accumulator = accumulator.step(dt, power)
 
         return accumulator
 
@@ -97,7 +101,7 @@ class ElectronState:
             dt * diffusivity * (self.muList[num_slices - 2] - self.muList[num_slices - 1]) / \
             (self.sliceLength * self.sliceLength)
 
-        # ballistic transport ------------------------------------------------------------------------------------------
+        # ballistic transport of nonthermal electrons ------------------------------------------------------------------
         excited_list = []
         for i in range(len(self.excitedList)):
             current_electron = self.excitedList[i]
