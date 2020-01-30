@@ -4,9 +4,9 @@ import matplotlib.animation as animation
 
 from src.phyiscs import *
 
-system = make_equilibrium(300, 0.25, 25)
+system = make_equilibrium(300, 0.25, 20)
 
-num_frames: int = 200
+num_frames: int = 500
 dt: float = 0.5
 
 # pulse properties
@@ -29,13 +29,15 @@ for i in range(num_frames):
     system = system.step(dt, power)
     t += dt
 
+print(system.extra_electrons())
+
 steps = [x * system.sliceLength for x in range(0, system.num_slices)]
 
 # code based on:
 # https://stackoverflow.com/questions/49165233/two-lines-matplotib-animation
 
 fig = plt.figure()
-ax = plt.axes(xlim=(0, system.sliceLength * system.num_slices), ylim=(-1, 1))
+ax = plt.axes(xlim=(0, system.sliceLength * system.num_slices), ylim=(-0.03, 0.03))
 line1, = ax.plot([], [], lw=3)
 line2, = ax.plot([], [], lw=3)
 
@@ -52,6 +54,6 @@ def animate(n):
     return [line1, line2]
 
 
-anim = animation.FuncAnimation(fig, animate, init_func=init, frames=num_frames, interval=100, blit=True)
+anim = animation.FuncAnimation(fig, animate, init_func=init, frames=num_frames, interval=50, blit=True)
 
 plt.show()
