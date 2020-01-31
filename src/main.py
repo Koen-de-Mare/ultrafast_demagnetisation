@@ -7,7 +7,7 @@ print("energy: {}".format(system.energy()))
 print("input energy: {}".format(system.accumulated_energy))
 system.plot()
 
-system = system.step(1.0, 10000.0)
+system = system.step(1.0, 2500.0)
 print(system.extra_electrons())
 print("extra_electrons: {}".format(system.extra_electrons()))
 print("energy: {}".format(system.energy()))

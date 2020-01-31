@@ -4,15 +4,18 @@ import matplotlib.animation as animation
 
 from src.phyiscs import *
 
-system = make_equilibrium(300, 0.25, 50)
+#system = make_equilibrium(300, 0.125, 160)
+#system = make_equilibrium(300, 0.25, 80)
+system = make_equilibrium(300, 0.5, 40)
+#system = make_equilibrium(300, 1.0, 20)
 
-num_frames: int = 500
 dt: float = 0.5
+num_frames: int = round(150 / dt)
 
 # pulse properties
 t_pulse: float = 20.0
 pulse_duration: float = 10.0
-pulse_energy: float = 2500.0
+pulse_energy: float = 4000.0
 
 mu_lists = []
 excited_lists = []
@@ -22,7 +25,7 @@ t: float = 0.0
 
 for i in range(num_frames):
     mu_lists.append(system.muList)
-    excited_lists.append(system.excited_density())
+    excited_lists.append(list(map(lambda x: x / Ds, system.excited_density())))
     temperature_lists.append(system.electron_temperature_distribution())
 
     power: float = pulse_energy * math.exp(
@@ -63,6 +66,6 @@ def animate(n):
     return [line1, line2, line3]
 
 
-anim = animation.FuncAnimation(fig, animate, init_func=init, frames=num_frames, interval=50, blit=True)
+anim = animation.FuncAnimation(fig, animate, init_func=init, frames=num_frames, interval=dt*100, blit=True)
 
 plt.show()
