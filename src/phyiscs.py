@@ -23,7 +23,7 @@ penetration_depth: float = 0.5  # (nm)
 E_nt: float = 1.0  # (eV)
 v_fermi: float = 0.1  # (nm fs^1)
 tau_ee: float = 50.0  # (fs)
-conductivity: float = 0.01  # (eV fs^-1 nm^-1 K^-1) heat conductivity for the thermalised electron system
+conductivity: float = 0.005  # (eV fs^-1 nm^-1 K^-1) heat conductivity for the thermalised electron system
 
 # simulation parameters:
 electrons_per_entity: float = 1.0  # (nm^-2)
@@ -45,7 +45,7 @@ class ElectronState:
 
         self.excitedList: list = []
 
-        self.accumulated_power: float = 0.0  # (eV nm^-2)
+        self.accumulated_energy: float = 0.0  # (eV nm^-2)
 
     def excited_density(self):
         excited_per_slice = [0] * self.num_slices
@@ -62,7 +62,7 @@ class ElectronState:
 
         for i in range(self.num_slices):
             temperatures[i] = math.sqrt(
-                (self.thermalEnergyList[i] / Ds - 0.5 * self.muList[i] * self.muList[i]) / (alpha * kB * kB)
+                max(0.0, (self.thermalEnergyList[i] / Ds - 0.5 * self.muList[i] * self.muList[i]) / (alpha * kB * kB))
             )
 
         return temperatures
@@ -86,6 +86,20 @@ class ElectronState:
         plt.axis([0, self.num_slices * self.sliceLength, 0, 1000])
 
         plt.show()
+
+    def energy(self) -> float:
+        temperatures = self.electron_temperature_distribution()
+        energy_accumulator: float = 0.0
+
+        for i in range(self.num_slices):
+            e_i: float = self.sliceLength * Ds * (
+                    0.5 * self.muList[i] * self.muList[i] + alpha * kB * kB * temperatures[i] * temperatures[i]
+            )
+            energy_accumulator += e_i
+
+        nonthermal_energy: float = len(self.excitedList) * electrons_per_entity * E_nt
+
+        return energy_accumulator + nonthermal_energy
 
     def extra_electrons(self) -> float:
         # calculates the number of excess electrons to check if conservation laws are met
@@ -119,7 +133,7 @@ class ElectronState:
         result.muList = self.muList.copy()
         result.thermalEnergyList = self.thermalEnergyList.copy()
         result.excitedList = []
-        result.accumulated_power = self.accumulated_power
+        result.accumulated_energy = self.accumulated_energy
 
         # check for stability of diffusive transport
         assert (dt < sliceLength * sliceLength / (2.25 * diffusivity))
@@ -155,17 +169,38 @@ class ElectronState:
 
             mu_a_0 = result.muList[i]
             mu_b_0 = result.muList[i + 1]
+
+            E_a_0 = result.thermalEnergyList[i]
+            E_b_0 = result.thermalEnergyList[i + 1]
+
+            E_mu_a_0 = Ds * 0.5 * mu_a_0 * mu_a_0
+            E_mu_b_0 = Ds * 0.5 * mu_b_0 * mu_b_0
+
+            E_th_a_0 = E_a_0 - E_mu_a_0
+            E_th_b_0 = E_b_0 - E_mu_b_0
+            assert (E_th_a_0 >= 0.0)
+            assert (E_th_b_0 >= 0.0)
+
             mu_a_1 = mu_a_0 + transport
             mu_b_1 = mu_b_0 - transport
 
-            # energy "freed" by redistributing electrons
-            delta_E: float = 0.5 * Ds * (mu_a_0 * mu_a_0 + mu_b_0 * mu_b_0 - mu_a_1 * mu_a_1 - mu_b_1 * mu_b_1)
+            E_mu_a_1 = Ds * 0.5 * mu_a_1 * mu_a_1
+            E_mu_b_1 = Ds * 0.5 * mu_b_1 * mu_b_1
+
+            delta_E = E_mu_a_0 + + E_mu_b_0 - E_mu_a_1 - E_mu_b_1
+            assert(delta_E >= -0.001)
+
+            E_th_a_1 = E_th_a_0 + 0.5 * delta_E
+            E_th_b_1 = E_th_b_0 + 0.5 * delta_E
+
+            E_a_1 = E_mu_a_1 + E_th_a_1
+            E_b_1 = E_mu_b_1 + E_th_b_1
 
             result.muList[i] = mu_a_1
             result.muList[i + 1] = mu_b_1
 
-            result.thermalEnergyList[i] += 0.5 * delta_E
-            result.thermalEnergyList[i + 1] += 0.5 * delta_E
+            result.thermalEnergyList[i] = E_a_1
+            result.thermalEnergyList[i + 1] = E_b_1
 
         # BALLISTIC TRANSPORT OF NON-THERMAL ELECTRONS -----------------------------------------------------------------
         excited_list = []
@@ -198,11 +233,11 @@ class ElectronState:
         # EXCITATION OF NON-THERMAL ELECTRONS --------------------------------------------------------------------------
         for i in range(num_slices):
             p_i = power * math.exp(- (i + 0.5) * self.sliceLength / penetration_depth)  # (eV fs^-1 nm^-3)
-            num_excitations_i: int = math.trunc(
+            num_excitations_i: int = round(
                 self.sliceLength * dt * p_i / (E_nt - self.muList[i]) / electrons_per_entity
             )  # (1)
 
-            result.accumulated_power += num_excitations_i * electrons_per_entity * (E_nt - self.muList[i])
+            result.accumulated_energy += num_excitations_i * electrons_per_entity * (E_nt - self.muList[i])
 
             for j in range(num_excitations_i):
                 new_electron = ExcitedElectron()
@@ -228,5 +263,7 @@ def make_equilibrium(temp: float, h: float, num_slices: int) -> ElectronState:
     result.thermalEnergyList = [Ds * alpha * kB * kB * temp * temp] * num_slices
 
     result.excitedList = []
+
+    result.accumulated_energy = Ds * alpha * kB * kB * temp * temp * num_slices * h
 
     return result
