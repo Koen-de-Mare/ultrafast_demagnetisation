@@ -28,7 +28,7 @@ electric_conductivity: float = 0.5  # (nm^-1 fs^-1) weird units as vacuum permit
 
 # simulation parameters:
 diffusive_transport: bool = False
-electrons_per_entity: float = 0.1  # (nm^-2)
+electrons_per_packet: float = 0.1  # (nm^-2)
 
 
 class ExcitedElectron:
@@ -55,7 +55,7 @@ class ElectronState:
             n = math.floor(self.excitedList[i].z / self.sliceLength)
             excited_per_slice[n] += 1
 
-        excited_density = list(map((lambda x: x * electrons_per_entity / self.sliceLength), excited_per_slice))
+        excited_density = list(map((lambda x: x * electrons_per_packet / self.sliceLength), excited_per_slice))
 
         return excited_density  # (nm^-3)
 
@@ -140,14 +140,14 @@ class ElectronState:
             )
             energy_accumulator += e_i
 
-        nonthermal_energy: float = len(self.excitedList) * electrons_per_entity * E_nt
+        nonthermal_energy: float = len(self.excitedList) * electrons_per_packet * E_nt
 
         return energy_accumulator + nonthermal_energy  # (eV)
 
     def extra_electrons(self) -> float:
         # calculates the number of excess electrons to check if conservation laws are met
 
-        num_excited = len(self.excitedList) * electrons_per_entity
+        num_excited = len(self.excitedList) * electrons_per_packet
 
         mu_accumulated = 0.0
         for i in range(self.num_slices):
@@ -275,8 +275,8 @@ class ElectronState:
         for i in range(len(excited_list)):
             if random.random() < p_decay:
                 n: int = math.floor(excited_list[i].z / self.sliceLength)
-                result.thermalEnergyList[n] += electrons_per_entity * (E_nt - result.muList[n]) / self.sliceLength
-                result.muList[n] += electrons_per_entity / (Ds * self.sliceLength)
+                result.thermalEnergyList[n] += electrons_per_packet * (E_nt - result.muList[n]) / self.sliceLength
+                result.muList[n] += electrons_per_packet / (Ds * self.sliceLength)
             else:
                 result.excitedList.append(excited_list[i])
 
@@ -288,13 +288,13 @@ class ElectronState:
                     math.exp(-(i+1) * sliceLength / penetration_depth)
             )  # (eV fs^-1 nm^-2)
 
-            num_excitations_i = round(p_i * dt / (E_nt - self.muList[i]) / electrons_per_entity)  # (1)
+            num_excitations_i = round(p_i * dt / (E_nt - self.muList[i]) / electrons_per_packet)  # (1)
 
-            result.accumulated_energy += num_excitations_i * electrons_per_entity * (E_nt - self.muList[i])
+            result.accumulated_energy += num_excitations_i * electrons_per_packet * (E_nt - self.muList[i])
 
             result.thermalEnergyList[i] -= \
-                num_excitations_i * electrons_per_entity * result.muList[i] / self.sliceLength
-            result.muList[i] -= num_excitations_i * electrons_per_entity / (Ds * self.sliceLength)
+                num_excitations_i * electrons_per_packet * result.muList[i] / self.sliceLength
+            result.muList[i] -= num_excitations_i * electrons_per_packet / (Ds * self.sliceLength)
 
             for j in range(num_excitations_i):
                 new_electron = ExcitedElectron()
