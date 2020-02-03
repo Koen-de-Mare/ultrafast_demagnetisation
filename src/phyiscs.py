@@ -78,7 +78,7 @@ class ElectronState:
 
         e_x = [0.0] * self.num_slices
 
-        e_x[0] = -0.5 * electron_density[0]
+        e_x[0] = -0.5 * electron_density[0] * self.sliceLength
 
         for i in range(1, self.num_slices):
             e_x[i] = e_x[i - 1] - 0.5 * self.sliceLength * (electron_density[i - 1] + electron_density[i])
@@ -94,7 +94,7 @@ class ElectronState:
 
         e_x = [0.0] * (self.num_slices - 1)
 
-        e_x[0] = -electron_density[0]
+        e_x[0] = -electron_density[0] * self.sliceLength
         for i in range(1, self.num_slices - 1):
             e_x[i] = e_x[i - 1] - electron_density[i] * self.sliceLength
 
