@@ -164,7 +164,7 @@ class ElectronState:
 
         return accumulator
 
-    def step(self, dt: float, power):
+    def step(self, dt: float, fluence: float):
         # for brevity
         num_slices = self.num_slices
         sliceLength = self.sliceLength
@@ -282,21 +282,25 @@ class ElectronState:
 
         # EXCITATION OF NON-THERMAL ELECTRONS --------------------------------------------------------------------------
         for i in range(num_slices):
-            p_i = power * math.exp(- (i + 0.5) * self.sliceLength / penetration_depth)  # (eV fs^-1 nm^-3)
-            num_excitations_i: int = round(
-                self.sliceLength * dt * p_i / (E_nt - self.muList[i]) / electrons_per_entity
-            )  # (1)
+
+            p_i = fluence * (
+                    math.exp(-i * sliceLength / penetration_depth) -
+                    math.exp(-(i+1) * sliceLength / penetration_depth)
+            )  # (eV fs^-1 nm^-2)
+
+            num_excitations_i = round(p_i * dt / (E_nt - self.muList[i]) / electrons_per_entity)  # (1)
 
             result.accumulated_energy += num_excitations_i * electrons_per_entity * (E_nt - self.muList[i])
+
+            result.thermalEnergyList[i] -= \
+                num_excitations_i * electrons_per_entity * result.muList[i] / self.sliceLength
+            result.muList[i] -= num_excitations_i * electrons_per_entity / (Ds * self.sliceLength)
 
             for j in range(num_excitations_i):
                 new_electron = ExcitedElectron()
 
                 new_electron.z = self.sliceLength * (i + random.random())
                 new_electron.vz = v_fermi * (2.0 * random.random() - 1)
-
-                result.thermalEnergyList[i] -= electrons_per_entity * result.muList[i] / self.sliceLength
-                result.muList[i] -= electrons_per_entity / (Ds * self.sliceLength)
 
                 result.excitedList.append(new_electron)
 
