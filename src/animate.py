@@ -6,8 +6,8 @@ from src.phyiscs import *
 
 #system = make_equilibrium(300, 0.125, 160)
 #system = make_equilibrium(300, 0.25, 80)
-system = make_equilibrium(300, 0.5, 40)
-#system = make_equilibrium(300, 1.0, 20)
+#system = make_equilibrium(300, 0.5, 40)
+system = make_equilibrium(300, 1.0, 20)
 
 dt: float = 0.5
 num_frames: int = round(150 / dt)
@@ -15,7 +15,7 @@ num_frames: int = round(150 / dt)
 # pulse properties
 t_pulse: float = 20.0
 pulse_duration: float = 10.0
-pulse_energy: float = 4000.0
+pulse_energy: float = 2000.0  # really energy per area (eV nm^-2)
 
 mu_lists = []
 excited_lists = []
@@ -28,10 +28,11 @@ for i in range(num_frames):
     excited_lists.append(list(map(lambda x: x / Ds, system.excited_density())))
     temperature_lists.append(system.electron_temperature_distribution())
 
-    power: float = pulse_energy * math.exp(
+    fluence: float = pulse_energy * math.exp(
         0.5 * (t - t_pulse)*(t_pulse - t) / (pulse_duration * pulse_duration)) / (pulse_duration * math.sqrt(2.0 * math.pi))
+    # (eV fs^-1 nm^-2)
 
-    system = system.step(dt, power)
+    system = system.step(dt, fluence)
     t += dt
 
 print(system.extra_electrons())
@@ -68,4 +69,9 @@ def animate(n):
 
 anim = animation.FuncAnimation(fig, animate, init_func=init, frames=num_frames, interval=dt*100, blit=True)
 
-plt.show()
+show = True
+if show:
+    plt.show()
+else:
+    writer = animation.FFMpegWriter(fps=30.0)
+    anim.save("output/animation.mp4", writer=writer)
