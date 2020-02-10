@@ -32,7 +32,7 @@ conductivity: float = 0.0025  # (eV fs^-1 nm^-1 K^-1) heat conductivity for the 
 electric_conductivity: float = 0.1  # (nm^-1 fs^-1 eV^-1) written as C in the documentation
 
 # simulation parameters:
-electrons_per_packet: float = 0.0005  # (nm^-2)
+electrons_per_packet: float = 0.0001  # (nm^-2)
 
 
 class ExcitedElectron:
@@ -46,7 +46,7 @@ class ElectronState:
         self.sliceLength: float = 0  # (nm)
         self.num_slices: int = 0  # (1)
 
-        self.muList: list = []  # (eV)
+        self.mu0List: list = []  # (eV)
         self.thermalEnergyList: list = []  # (eV nm^-3), note that this is energy density per volume, not per slice
 
         self.excitedList: list = []
@@ -68,7 +68,7 @@ class ElectronState:
 
         electron_density = [0.0] * self.num_slices
         for i in range(self.num_slices):
-            electron_density[i] = Ds * self.muList[i] + excited_density[i]
+            electron_density[i] = Ds * self.mu0List[i] + excited_density[i]
 
         return electron_density  # (nm^-3)
 
@@ -78,6 +78,7 @@ class ElectronState:
         return charge_density  # (e nm^-3)
 
     def electric_field_intersite(self):
+        # electric field on the interface between slice [n] and [n+1]
         charge_density = self.charge_density()
 
         e_x = [0.0] * (self.num_slices - 1)
@@ -88,12 +89,30 @@ class ElectronState:
 
         return e_x  # (eV nm^-1 e^-1)
 
+    def potential(self):
+        electric_field_is = self.electric_field_intersite()
+        potential = [0.0] * self.num_slices
+
+        for i in range(self.num_slices-1):
+            potential[i + 1] = potential[i] - electric_field_is[i] * self.sliceLength
+
+        return potential  # (eV e^-1)
+
+    def electrochemical_potential(self):
+        potential = self.potential()
+        ec_potential = [0.0] * self.num_slices
+
+        for i in range(self.num_slices):
+            ec_potential[i] = self.mu0List[i] + electron_charge * potential[i]
+
+        return ec_potential  # (eV)
+
     def electron_temperature_distribution(self):
         temperatures = [0.0] * self.num_slices
 
         for i in range(self.num_slices):
             temperatures[i] = math.sqrt(
-                max(0.0, (self.thermalEnergyList[i] / Ds - 0.5 * self.muList[i] * self.muList[i]) / (alpha * kB * kB))
+                max(0.0, (self.thermalEnergyList[i] / Ds - 0.5 * self.mu0List[i] * self.mu0List[i]) / (alpha * kB * kB))
             )
 
         return temperatures  # (K)
@@ -105,8 +124,8 @@ class ElectronState:
         plt.figure(figsize=(9, 9))
 
         plt.subplot(211)
-        plt.plot(steps, self.muList, steps, list(map(lambda x: x / Ds, excited_density)))
-        plt.ylabel("mu (eV)")
+        plt.plot(steps, self.mu0List, steps, list(map(lambda x: x / Ds, excited_density)))
+        plt.ylabel("mu_0 (eV)")
         plt.xlabel("z (nm)")
         plt.axis([0, self.num_slices * self.sliceLength, -0.1, 0.1])
 
@@ -124,7 +143,7 @@ class ElectronState:
 
         for i in range(self.num_slices):
             e_i: float = self.sliceLength * Ds * (
-                    0.5 * self.muList[i] * self.muList[i] + alpha * kB * kB * temperatures[i] * temperatures[i]
+                    0.5 * self.mu0List[i] * self.mu0List[i] + alpha * kB * kB * temperatures[i] * temperatures[i]
             )
             energy_accumulator += e_i
 
@@ -139,7 +158,7 @@ class ElectronState:
 
         mu_accumulated = 0.0
         for i in range(self.num_slices):
-            mu_accumulated += self.muList[i]
+            mu_accumulated += self.mu0List[i]
 
         return num_excited + self.sliceLength * mu_accumulated * Ds  # (nm^-2)
 
@@ -161,7 +180,7 @@ class ElectronState:
         result = ElectronState()
         result.sliceLength = sliceLength
         result.num_slices = num_slices
-        result.muList = self.muList.copy()
+        result.mu0List = self.mu0List.copy()
         result.thermalEnergyList = self.thermalEnergyList.copy()
         result.excitedList = []
         result.accumulated_energy = self.accumulated_energy
@@ -193,19 +212,16 @@ class ElectronState:
         electric_field_is = self.electric_field_intersite()
 
         for i in range(0, num_slices-1):
-            #transport in units of (nm^-3)
+            # both types of transport in units of (nm^-3)
             transport_diffusive = \
-                dt * electric_conductivity * (self.muList[i] - self.muList[i+1]) / (sliceLength * sliceLength)
-            transport_driven = electric_conductivity * electron_charge * electric_field_is[i] * dt / sliceLength
+                dt * electric_conductivity * (self.mu0List[i] - self.mu0List[i + 1]) / (sliceLength * sliceLength)
+            transport_driven = \
+                electric_conductivity * electron_charge * electric_field_is[i] * dt / sliceLength
+
             transport = transport_diffusive + transport_driven  # (nm^-3)
 
-            #if diffusive_transport:
-            #    transport = Ds * dt * diffusivity * (self.muList[i + 1] - self.muList[i]) / (sliceLength * sliceLength)
-            #else:
-            #    transport = dt * electric_field_is[i] * electric_conductivity
-
-            mu_a_0 = result.muList[i]
-            mu_b_0 = result.muList[i + 1]
+            mu_a_0 = result.mu0List[i]
+            mu_b_0 = result.mu0List[i + 1]
 
             E_a_0 = result.thermalEnergyList[i]
             E_b_0 = result.thermalEnergyList[i + 1]
@@ -233,8 +249,8 @@ class ElectronState:
             E_a_1 = E_mu_a_1 + E_th_a_1
             E_b_1 = E_mu_b_1 + E_th_b_1
 
-            result.muList[i] = mu_a_1
-            result.muList[i + 1] = mu_b_1
+            result.mu0List[i] = mu_a_1
+            result.mu0List[i + 1] = mu_b_1
 
             result.thermalEnergyList[i] = E_a_1
             result.thermalEnergyList[i + 1] = E_b_1
@@ -262,8 +278,8 @@ class ElectronState:
         for i in range(len(excited_list)):
             if random.random() < p_decay:
                 n: int = math.floor(excited_list[i].z / self.sliceLength)
-                result.thermalEnergyList[n] += electrons_per_packet * (E_nt - result.muList[n]) / self.sliceLength
-                result.muList[n] += electrons_per_packet / (Ds * self.sliceLength)
+                result.thermalEnergyList[n] += electrons_per_packet * (E_nt - result.mu0List[n]) / self.sliceLength
+                result.mu0List[n] += electrons_per_packet / (Ds * self.sliceLength)
             else:
                 result.excitedList.append(excited_list[i])
 
@@ -275,13 +291,13 @@ class ElectronState:
                     math.exp(-(i+1) * sliceLength / penetration_depth)
             )  # (eV fs^-1 nm^-2)
 
-            num_excitations_i = round(p_i * dt / (E_nt - self.muList[i]) / electrons_per_packet)  # (1)
+            num_excitations_i = round(p_i * dt / (E_nt - self.mu0List[i]) / electrons_per_packet)  # (1)
 
-            result.accumulated_energy += num_excitations_i * electrons_per_packet * (E_nt - self.muList[i])
+            result.accumulated_energy += num_excitations_i * electrons_per_packet * (E_nt - self.mu0List[i])
 
             result.thermalEnergyList[i] -= \
-                num_excitations_i * electrons_per_packet * result.muList[i] / self.sliceLength
-            result.muList[i] -= num_excitations_i * electrons_per_packet / (Ds * self.sliceLength)
+                num_excitations_i * electrons_per_packet * result.mu0List[i] / self.sliceLength
+            result.mu0List[i] -= num_excitations_i * electrons_per_packet / (Ds * self.sliceLength)
 
             for j in range(num_excitations_i):
                 new_electron = ExcitedElectron()
@@ -300,7 +316,7 @@ def make_equilibrium(temp: float, h: float, num_slices: int) -> ElectronState:
     result.sliceLength = h
     result.num_slices = num_slices
 
-    result.muList = [0.0] * num_slices
+    result.mu0List = [0.0] * num_slices
     result.thermalEnergyList = [Ds * alpha * kB * kB * temp * temp] * num_slices
 
     result.excitedList = []

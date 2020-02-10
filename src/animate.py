@@ -17,6 +17,7 @@ t_pulse: float = 20.0
 pulse_duration: float = 10.0
 pulse_energy: float = 3.0  # really energy per area (eV nm^-2)
 
+mu0_lists = []
 mu_lists = []
 excited_lists = []
 temperature_lists = []
@@ -24,7 +25,8 @@ temperature_lists = []
 t: float = 0.0
 
 for i in range(num_frames):
-    mu_lists.append(system.muList)
+    mu0_lists.append(system.mu0List)
+    mu_lists.append(system.electrochemical_potential())
     excited_lists.append(list(map(lambda x: x / Ds, system.excited_density())))
     temperature_lists.append(system.electron_temperature_distribution())
 
@@ -42,7 +44,7 @@ steps = [x * system.sliceLength for x in range(0, system.num_slices)]
 # code based on:
 # https://stackoverflow.com/questions/49165233/two-lines-matplotib-animation
 
-fig, (ax1, ax2) = plt.subplots(2, 1)
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
 
 ax1.set_xlim(0, system.sliceLength * system.num_slices)
 ax1.set_ylim(-0.01, 0.01)
@@ -53,18 +55,24 @@ ax2.set_xlim(0, system.sliceLength * system.num_slices)
 ax2.set_ylim(0, 1000)
 line3, = ax2.plot([], [], lw=3)
 
+ax3.set_xlim(0, system.sliceLength * system.num_slices)
+ax3.set_ylim(0.0, 50.0)
+line4, = ax3.plot([], [], lw=3)
+
 def init():
     line1.set_data([], [])
     line2.set_data([], [])
     line3.set_data([], [])
-    return [line1, line2, line3]
+    line4.set_data([], [])
+    return [line1, line2, line3, line4]
 
 
 def animate(n):
-    line1.set_data(steps, mu_lists[n])
+    line1.set_data(steps, mu0_lists[n])
     line2.set_data(steps, excited_lists[n])
     line3.set_data(steps, temperature_lists[n])
-    return [line1, line2, line3]
+    line4.set_data(steps, mu_lists[n])
+    return [line1, line2, line3, line4]
 
 
 anim = animation.FuncAnimation(fig, animate, init_func=init, frames=num_frames, interval=dt*100, blit=True)
