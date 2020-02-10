@@ -4,10 +4,10 @@ import matplotlib.animation as animation
 
 from src.phyiscs import *
 
-#system = make_equilibrium(300, 0.125, 160)
-#system = make_equilibrium(300, 0.25, 80)
-#system = make_equilibrium(300, 0.5, 40)
-system = make_equilibrium(300, 1.0, 20)
+#system = make_equilibrium(300, 1.25, 160)
+#system = make_equilibrium(300, 2.5, 80)
+#system = make_equilibrium(300, 5.0, 40)
+system = make_equilibrium(300, 10.0, 20)
 
 dt: float = 0.5
 num_frames: int = round(150 / dt)
@@ -15,7 +15,7 @@ num_frames: int = round(150 / dt)
 # pulse properties
 t_pulse: float = 20.0
 pulse_duration: float = 10.0
-pulse_energy: float = 2000.0  # really energy per area (eV nm^-2)
+pulse_energy: float = 3.0  # really energy per area (eV nm^-2)
 
 mu_lists = []
 excited_lists = []

@@ -3,32 +3,36 @@ import random
 
 import matplotlib.pyplot as plt
 
-# UNITS:
+# FUNDAMENTAL UNITS:
 # length: nm
 # temperature: K
 # energy: eV
 # time: fs
+# charge: e, the elementary charge.
+#     The charge of an electron is -1.0 e, but please use the electron_charge constant for clarity
 
-# NOTES:
-# as the model is 1D some peculiarities occur; the unit of number of excited electrons is actually nm^-2
+# DERIVED UNITS
+# electric field: (eV nm^-1 e^-1)
+# voltage: (eV e^-1)
 
 # physical constants:
 kB: float = 0.00008617333262145  # Boltzmann constant (eV K^-1)
 alpha: float = 1.645  # related to heat capacity of thermal electrons (1)
+epsilon_0: float = 0.055263  # vacuum permeability (e^2 eV^-1 nm^-1)
+electron_charge = -1.0  # (e)
 
 # system parameters:
-Ds: float = 100000.0  # (eV^-1 nm^-3) density of states
+Ds: float = 10.0  # (eV^-1 nm^-3) density of states
 diffusivity: float = 0.025  # (nm^2 fs^-1) constant of diffusion of thermal electrons
-penetration_depth: float = 0.5  # (nm)
+penetration_depth: float = 15.0  # (nm)
 E_nt: float = 1.0  # (eV)
-v_fermi: float = 0.1  # (nm fs^1)
+v_fermi: float = 1.0  # (nm fs^1)
 tau_ee: float = 200.0  # (fs)
-conductivity: float = 0.005  # (eV fs^-1 nm^-1 K^-1) heat conductivity for the thermalised electron system
-electric_conductivity: float = 0.5  # (nm^-1 fs^-1) weird units as vacuum permitivity and electron charge are included
+conductivity: float = 0.0025  # (eV fs^-1 nm^-1 K^-1) heat conductivity for the thermalised electron system
+electric_conductivity: float = 0.1  # (nm^-1 fs^-1 eV^-1) written as C in the documentation
 
 # simulation parameters:
-diffusive_transport: bool = False
-electrons_per_packet: float = 0.1  # (nm^-2)
+electrons_per_packet: float = 0.0005  # (nm^-2)
 
 
 class ExcitedElectron:
@@ -68,37 +72,21 @@ class ElectronState:
 
         return electron_density  # (nm^-3)
 
-    def electric_field_lattice_sites(self):
-        # note that the units are off
-        # elementary charge and vacuum permitivity have not been included
-        # as they can just be absorbed into the conductivity.
-        # electric field is calculated in the center of a slice
-
+    def charge_density(self):
         electron_density = self.electron_density()
-
-        e_x = [0.0] * self.num_slices
-
-        e_x[0] = -0.5 * electron_density[0] * self.sliceLength
-
-        for i in range(1, self.num_slices):
-            e_x[i] = e_x[i - 1] - 0.5 * self.sliceLength * (electron_density[i - 1] + electron_density[i])
-
-        return e_x  # (nm^-2)
+        charge_density = list(map((lambda x: x * electron_charge), electron_density))
+        return charge_density  # (e nm^-3)
 
     def electric_field_intersite(self):
-        # like in electric_field_lattice_sites() the units are strange
-        # electric field at edge between slices
-        # for this reason the result has a length of (self.num_slices - 1)
-
-        electron_density = self.electron_density()
+        charge_density = self.charge_density()
 
         e_x = [0.0] * (self.num_slices - 1)
 
-        e_x[0] = -electron_density[0] * self.sliceLength
+        e_x[0] = charge_density[0] * self.sliceLength / epsilon_0
         for i in range(1, self.num_slices - 1):
-            e_x[i] = e_x[i - 1] - electron_density[i] * self.sliceLength
+            e_x[i] = e_x[i - 1] + charge_density[i] * self.sliceLength / epsilon_0
 
-        return e_x  # (nm^-2)
+        return e_x  # (eV nm^-1 e^-1)
 
     def electron_temperature_distribution(self):
         temperatures = [0.0] * self.num_slices
@@ -178,9 +166,6 @@ class ElectronState:
         result.excitedList = []
         result.accumulated_energy = self.accumulated_energy
 
-        # check for stability of diffusive transport
-        assert (dt < sliceLength * sliceLength / (2.25 * diffusivity))
-
         # HEAT DIFFUSION -----------------------------------------------------------------------------------------------
         temperatures = self.electron_temperature_distribution()
 
@@ -200,22 +185,24 @@ class ElectronState:
                 (self.sliceLength * self.sliceLength)
 
         # TRANSPORT OF THERMALISED ELECTRONS ---------------------------------------------------------------------------
-        # implements the following differential equation:
-        # d_mu / d_t = diffusivity * d^2_mu / d_x^2
         # The value in self.muList are used to calculate how many electrons to transport,
         # conservation of energy uses the values in result.muList .
         # Because for every slice transport to the left is evaluated before transport to the right,
         # this may break symmetry slightly but is a compromise to achieve conservation of energy.
 
-        if not diffusive_transport:
-            electric_field_is = self.electric_field_intersite()
+        electric_field_is = self.electric_field_intersite()
 
         for i in range(0, num_slices-1):
             #transport in units of (nm^-3)
-            if diffusive_transport:
-                transport = Ds * dt * diffusivity * (self.muList[i + 1] - self.muList[i]) / (sliceLength * sliceLength)
-            else:
-                transport = dt * electric_field_is[i] * electric_conductivity
+            transport_diffusive = \
+                dt * electric_conductivity * (self.muList[i] - self.muList[i+1]) / (sliceLength * sliceLength)
+            transport_driven = electric_conductivity * electron_charge * electric_field_is[i] * dt / sliceLength
+            transport = transport_diffusive + transport_driven  # (nm^-3)
+
+            #if diffusive_transport:
+            #    transport = Ds * dt * diffusivity * (self.muList[i + 1] - self.muList[i]) / (sliceLength * sliceLength)
+            #else:
+            #    transport = dt * electric_field_is[i] * electric_conductivity
 
             mu_a_0 = result.muList[i]
             mu_b_0 = result.muList[i + 1]
@@ -231,14 +218,14 @@ class ElectronState:
             assert (E_th_a_0 >= 0.0)
             assert (E_th_b_0 >= 0.0)
 
-            mu_a_1 = mu_a_0 + transport / Ds
-            mu_b_1 = mu_b_0 - transport / Ds
+            mu_a_1 = mu_a_0 - transport / Ds
+            mu_b_1 = mu_b_0 + transport / Ds
 
             E_mu_a_1 = Ds * 0.5 * mu_a_1 * mu_a_1
             E_mu_b_1 = Ds * 0.5 * mu_b_1 * mu_b_1
 
             delta_E = E_mu_a_0 + + E_mu_b_0 - E_mu_a_1 - E_mu_b_1
-            assert(delta_E >= -0.01)
+            #assert(delta_E >= -0.01)
 
             E_th_a_1 = E_th_a_0 + 0.5 * delta_E
             E_th_b_1 = E_th_b_0 + 0.5 * delta_E
