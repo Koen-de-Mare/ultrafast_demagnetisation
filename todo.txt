@@ -1,11 +1,2 @@
-heat dynamics, instead keep track of energy of thermalised electrons?
-ohmic transport
-
-for thermal electrons:
-Both diffusion of mu and diffusion of heat influence the development of the temperature distribution
-In particular, it seems that mu diffusion seems to give a lower bound for the temperature conductivity:
-suppose a slice at index n is at low temperature and mu[n] = 0.
-An adjacent slice with larger mu causes an increase in mu[n], but if the heat conductivity is small, thermalEnergy[n]
-will stay roughly constant. therefore
-thermalEnergy / Ds = constant = 0.5 * mu^2 + alpha * kB^2 * Te^2
-an increase in the mu^2 term must cause a decrease in the Te^2 term, but this can not always occur since the term is > 0
+why does magnetisation close to the interface increase momentarilly?
+smoothing of animated spin current
