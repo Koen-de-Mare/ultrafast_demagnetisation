@@ -22,7 +22,7 @@ epsilon_0: float = 0.055263  # vacuum permeability (e^2 eV^-1 nm^-1)
 electron_charge = -1.0  # (e)
 
 # system parameters:
-Ds: float = 10.0  # (eV^-1 nm^-3) density of states
+Ds: float = 100.0  # (eV^-1 nm^-3) density of states
 diffusivity: float = 0.025  # (nm^2 fs^-1) constant of diffusion of thermal electrons
 penetration_depth: float = 15.0  # (nm)
 E_nt: float = 1.0  # (eV)
@@ -32,7 +32,7 @@ conductivity: float = 0.0025  # (eV fs^-1 nm^-1 K^-1) heat conductivity for the 
 electric_conductivity: float = 0.1  # (nm^-1 fs^-1 eV^-1) written as C in the documentation
 
 # simulation parameters:
-electrons_per_packet: float = 0.0001  # (nm^-2)
+electrons_per_packet: float = 0.001  # (nm^-2)
 
 
 class ExcitedElectron:

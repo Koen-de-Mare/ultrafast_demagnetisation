@@ -6,8 +6,8 @@ from src.phyiscs import *
 
 #system = make_equilibrium(300, 1.25, 160)
 #system = make_equilibrium(300, 2.5, 80)
-#system = make_equilibrium(300, 5.0, 40)
-system = make_equilibrium(300, 10.0, 20)
+system = make_equilibrium(300, 5.0, 40)
+#system = make_equilibrium(300, 10.0, 20)
 
 dt: float = 0.5
 num_frames: int = round(150 / dt)
@@ -15,7 +15,7 @@ num_frames: int = round(150 / dt)
 # pulse properties
 t_pulse: float = 20.0
 pulse_duration: float = 10.0
-pulse_energy: float = 3.0  # really energy per area (eV nm^-2)
+pulse_energy: float = 30.0  # really energy per area (eV nm^-2)
 
 mu0_lists = []
 mu_lists = []
@@ -56,7 +56,7 @@ ax2.set_ylim(0, 1000)
 line3, = ax2.plot([], [], lw=3)
 
 ax3.set_xlim(0, system.sliceLength * system.num_slices)
-ax3.set_ylim(0.0, 50.0)
+ax3.set_ylim(0.0, 100.0)
 line4, = ax3.plot([], [], lw=3)
 
 def init():
