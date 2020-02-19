@@ -29,13 +29,18 @@ diffusivity: float = 0.025  # (nm^2 fs^-1) constant of diffusion of thermal elec
 penetration_depth: float = 15.0  # (nm)
 E_nt: float = 1.0  # (eV)
 v_fermi: float = 1.0  # (nm fs^1)
-tau_ee_up: float = 200.0  # (fs)
-tau_ee_dn: float = 10.0  # (fs)
-conductivity: float = 0.0025  # (eV fs^-1 nm^-1 K^-1) heat conductivity for the thermalised electron system
-electric_conductivity: float = 0.1  # (nm^-1 fs^-1 eV^-1) written as C in the documentation
+tau_ee_up: float = 200.0  # (fs) previously 200.0
+tau_ee_dn: float = 10.0  # (fs), previously 10.0
+
+# the values of the parameters below should both be around 90, taken from the bulk conductivity of Ni,
+# for the driven transport this would lead to numerical instability.
+# The largest value that approximately achieves instant screening is chosen.
+electric_conductivity_driven: float = 0.1  # (nm^-1 fs^-1 eV^-1) written as C in the documentation
+electric_conductivity_diffusive: float = 90.0  # (nm^-1 fs^-1 eV^-1) written as C in the documentation
+
 
 # simulation parameters:
-electrons_per_packet: float = 0.0001  # (nm^-2), 0.0001 for animations
+electrons_per_packet: float = 0.001  # (nm^-2), 0.0001 for animations
 
 
 class ExcitedElectron:
@@ -233,9 +238,9 @@ class ElectronState:
 
             # up
             transport_diffusive_up = (Ds_up / Ds) * \
-                dt * electric_conductivity * (self.mu0List_up[i] - self.mu0List_up[i + 1]) / (sliceLength * sliceLength)
+                dt * electric_conductivity_diffusive * (self.mu0List_up[i] - self.mu0List_up[i + 1]) / (sliceLength * sliceLength)
             transport_driven_up = (Ds_up / Ds) * \
-                electric_conductivity * electron_charge * electric_field_is[i] * dt / sliceLength
+                electric_conductivity_driven * electron_charge * electric_field_is[i] * dt / sliceLength
 
             transport_up = transport_diffusive_up + transport_driven_up  # (nm^-3)
 
@@ -249,9 +254,9 @@ class ElectronState:
 
             # dn
             transport_diffusive_dn = (Ds_dn / Ds) * \
-                dt * electric_conductivity * (self.mu0List_dn[i] - self.mu0List_dn[i + 1]) / (sliceLength * sliceLength)
+                dt * electric_conductivity_diffusive * (self.mu0List_dn[i] - self.mu0List_dn[i + 1]) / (sliceLength * sliceLength)
             transport_driven_dn = (Ds_dn / Ds) * \
-                electric_conductivity * electron_charge * electric_field_is[i] * dt / sliceLength
+                electric_conductivity_driven * electron_charge * electric_field_is[i] * dt / sliceLength
 
             transport_dn = transport_diffusive_dn + transport_driven_dn  # (nm^-3)
 

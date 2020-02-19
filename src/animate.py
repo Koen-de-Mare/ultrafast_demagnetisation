@@ -12,6 +12,8 @@ system = make_equilibrium(300, 5.0, 40)
 dt: float = 0.5
 num_frames: int = round(150 / dt)
 
+include_ballistic = False  # include magnetisation of ballistic electrons in moke
+
 # pulse properties
 t_pulse: float = 20.0
 pulse_duration: float = 10.0
@@ -32,8 +34,6 @@ for i in range(num_frames):
     mu0_dn_lists.append(system.mu0List_dn)
     excited_up_lists.append(system.excited_density_up())
     excited_dn_lists.append(system.excited_density_dn())
-    #excited_up_lists.append(list(map((lambda x: x / Ds_up), system.excited_density_up())))
-    #excited_dn_lists.append(list(map((lambda x: x / Ds_dn), system.excited_density_dn())))
     spin_current_lists.append(system.spin_current)
 
     print("extra up: {}".format(system.extra_electrons_up()))
@@ -71,7 +71,7 @@ line3, = ax2.plot([], [], lw=3)
 line4, = ax2.plot([], [], lw=3)
 
 ax3.set_xlim(0, system.sliceLength * system.num_slices)
-ax3.set_ylim(-0.3, 0.3)
+ax3.set_ylim(-0.5, 0.5)
 ax3.set_ylabel("magnetisation \n (nm^-3)")
 ax3.axhline(y=0, color='b')
 line5, = ax3.plot([], [], lw=3)
@@ -104,9 +104,14 @@ def animate(n):
 
     magnetisation = [0.0] * system.num_slices
     for i in range(system.num_slices):
-        magnetisation[i] = \
-            mu0_up_lists[n][i] * Ds_up + excited_up_lists[n][i] - \
-            mu0_dn_lists[n][i] * Ds_dn - excited_dn_lists[n][i]
+        magnetisation_thermal = \
+            mu0_up_lists[n][i] * Ds_up - mu0_dn_lists[n][i] * Ds_dn
+        magnetisation_nonthermal = \
+            excited_up_lists[n][i] - excited_dn_lists[n][i]
+
+        magnetisation[i] = magnetisation_thermal
+        if include_ballistic:
+            magnetisation[i] += magnetisation_nonthermal
 
     line5.set_data(steps, magnetisation)
     line6.set_data(steps, spin_current_lists[n])
@@ -115,7 +120,7 @@ def animate(n):
 
 anim = animation.FuncAnimation(fig, animate, init_func=init, frames=num_frames, interval=dt*100, blit=True)
 
-show = False
+show = True
 if show:
     plt.show()
 else:
