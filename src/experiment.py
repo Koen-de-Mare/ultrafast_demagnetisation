@@ -3,14 +3,16 @@ import math
 import matplotlib.pyplot as plt
 
 from src.phyiscs import *
+#from src.simulation_parameters import SimulationParameters
+from src.system_parameters.default_system import make_default_system
+from src.simulation_parameters.default_simulation import make_default_simulation
 
-#system = make_equilibrium(300, 1.25, 160)
-#system = make_equilibrium(300, 2.5, 80)
-#system = make_equilibrium(300, 5.0, 40)
-system = make_equilibrium(300, 10.0, 20)
+syspar = make_default_system()
+simpar = make_default_simulation()
 
-dt: float = 0.5
-num_frames: int = round(300 / dt)
+system = make_equilibrium(syspar, simpar)
+
+num_frames: int = round(300 / simpar.dt)
 
 # pulse properties
 t_pulse: float = 20.0
@@ -31,8 +33,8 @@ for i in range(num_frames):
 
     moke_signal = 0.0  # (nm^-2)
     for j in range(system.num_slices):
-        sensitivity = math.exp(-1 * j * system.sliceLength / moke_depth)
-        moke_signal += (Ds_up * uplist[j] - Ds_dn * dnlist[j]) * system.sliceLength
+        sensitivity = math.exp(-1 * j * simpar.sliceLength / moke_depth)
+        moke_signal += (syspar.Ds_up * uplist[j] - syspar.Ds_dn * dnlist[j]) * simpar.sliceLength
 
     moke_list.append(moke_signal)
     t_list.append(t)
@@ -45,8 +47,8 @@ for i in range(num_frames):
         0.5 * (t - t_pulse)*(t_pulse - t) / (pulse_duration * pulse_duration)) / (pulse_duration * math.sqrt(2.0 * math.pi))
     # (eV fs^-1 nm^-2)
 
-    system = system.step(dt, fluence)
-    t += dt
+    system = system.step(fluence)
+    t += simpar.dt
 
 print(system.extra_electrons())
 
