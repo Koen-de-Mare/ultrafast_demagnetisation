@@ -219,9 +219,10 @@ class SimulationState:
 
             # up
             transport_diffusive_up = (self.syspar.Ds_up / self.syspar.Ds) * \
-                self.simpar.dt * self.syspar.electric_conductivity_diffusive * (self.mu0List_up[i] - self.mu0List_up[i + 1]) / (sliceLength * sliceLength)
-            transport_driven_up = (self.syspar.Ds_up / self.syspar.Ds) * \
-                self.syspar.electric_conductivity_driven * electron_charge * electric_field_is[i] * self.simpar.dt / sliceLength
+                self.simpar.dt * self.syspar.electric_conductivity_diffusive * \
+                (self.mu0List_up[i] - self.mu0List_up[i + 1]) / (sliceLength * sliceLength)
+            transport_driven_up = (self.syspar.Ds_up / self.syspar.Ds) * self.syspar.electric_conductivity_driven * \
+                electron_charge * electric_field_is[i] * self.simpar.dt / sliceLength
 
             transport_up = transport_diffusive_up + transport_driven_up  # (nm^-3)
 
@@ -235,9 +236,10 @@ class SimulationState:
 
             # dn
             transport_diffusive_dn = (self.syspar.Ds_dn / self.syspar.Ds) * \
-                self.simpar.dt * self.syspar.electric_conductivity_diffusive * (self.mu0List_dn[i] - self.mu0List_dn[i + 1]) / (sliceLength * sliceLength)
-            transport_driven_dn = (self.syspar.Ds_dn / self.syspar.Ds) * \
-                self.syspar.electric_conductivity_driven * electron_charge * electric_field_is[i] * self.simpar.dt / sliceLength
+                self.simpar.dt * self.syspar.electric_conductivity_diffusive * \
+                (self.mu0List_dn[i] - self.mu0List_dn[i + 1]) / (sliceLength * sliceLength)
+            transport_driven_dn = (self.syspar.Ds_dn / self.syspar.Ds) * self.syspar.electric_conductivity_driven * \
+                electron_charge * electric_field_is[i] * self.simpar.dt / sliceLength
 
             transport_dn = transport_diffusive_dn + transport_driven_dn  # (nm^-3)
 
@@ -309,8 +311,10 @@ class SimulationState:
             num_excitations_i_up = round(num_excitations_i * self.syspar.Ds_up / self.syspar.Ds)
             num_excitations_i_dn = round(num_excitations_i * self.syspar.Ds_dn / self.syspar.Ds)
 
-            result.mu0List_up[i] -= num_excitations_i_up * self.simpar.electrons_per_packet / (self.syspar.Ds_up * sliceLength)
-            result.mu0List_dn[i] -= num_excitations_i_dn * self.simpar.electrons_per_packet / (self.syspar.Ds_dn * sliceLength)
+            result.mu0List_up[i] -= \
+                num_excitations_i_up * self.simpar.electrons_per_packet / (self.syspar.Ds_up * sliceLength)
+            result.mu0List_dn[i] -= \
+                num_excitations_i_dn * self.simpar.electrons_per_packet / (self.syspar.Ds_dn * sliceLength)
 
             for j in range(num_excitations_i_up):
                 new_electron = ExcitedElectron()
