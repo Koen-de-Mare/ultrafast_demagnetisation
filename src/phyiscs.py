@@ -3,9 +3,6 @@ import random
 
 import matplotlib.pyplot as plt
 
-from src.simulation_parameters_container import SimulationParameters
-from src.system_parameters_container import SystemParameters
-
 # FUNDAMENTAL UNITS:
 # length: nm
 # temperature: K
@@ -23,67 +20,114 @@ kB: float = 0.00008617333262145  # Boltzmann constant (eV K^-1)
 alpha: float = 1.645  # related to heat capacity of thermal electrons (1)
 epsilon_0: float = 0.055263  # vacuum permeability (e^2 eV^-1 nm^-1)
 electron_charge = -1.0  # (e)
+e = 1.0  # (e)
 
-
-class ExcitedElectron:
-    def __init__(self):
-        self.z: float = 0.0  # (nm)
-        self.vz: float = 0.0  # (nm)
-        self.is_up = True
-
+target_sliceWidth = 0.05  # (nm)
 
 class SimulationState:
     def __init__(self):
-        self.syspar = SystemParameters()
-        self.simpar = SimulationParameters()
+        self.dt = 0.0
+
+        # slice properties
+        self.h: list = []
+        self.Ds_up: list = []
+        self.Ds_dn: list = []
+        self.tau_sf: list = []
+
+        # interface properties
+        self.alpha_up: list = []
+        self.alpha_dn: list = []
+        self.beta_up: list = []
+        self.beta_dn: list = []
 
         self.num_slices: int = 0  # (1)
 
         self.mu0List_up: list = []  # (eV)
         self.mu0List_dn: list = []  # (eV)
 
-        self.excitedList: list = []
+    def add_layer(self, material, layer_thickness, C_interface):
 
-        self.spin_current: list = []  # (nm^-2 fs^-1)
+        new_layers = math.ceil(layer_thickness / target_sliceWidth)
+        sliceWidth = layer_thickness / new_layers
 
-    def excited_density(self):
-        excited_per_slice = [0] * self.num_slices
-        for i in range(len(self.excitedList)):
-            n = math.floor(self.excitedList[i].z / self.simpar.sliceLength)
-            excited_per_slice[n] += 1
+        # slice properties
+        self.h.extend([sliceWidth] * new_layers)
+        self.Ds_up.extend([material.Ds_up] * new_layers)
+        self.Ds_dn.extend([material.Ds_dn] * new_layers)
+        self.tau_sf.extend([material.tau_sf] * new_layers)
 
-        excited_density = list(map((lambda x: x * self.simpar.electrons_per_packet / self.simpar.sliceLength), excited_per_slice))
+        # interlayer interface
+        self.alpha_up.append(-C_interface)
+        self.alpha_dn.append(-C_interface)
+        self.beta_up.append(0.0)
+        self.beta_dn.append(0.0)
 
-        return excited_density  # (nm^-3)
+        # bulk interface properties
+        self.alpha_up.extend([-material.conductivity_up / sliceWidth] * (new_layers - 1))
+        self.alpha_dn.extend([-material.conductivity_dn / sliceWidth] * (new_layers - 1))
+        self.beta_up.extend([-material.conductivity_up * e] * (new_layers - 1))
+        self.beta_dn.extend([-material.conductivity_dn * e] * (new_layers - 1))
 
-    def excited_density_up(self):
-        excited_per_slice = [0] * self.num_slices
-        for i in range(len(self.excitedList)):
-            if self.excitedList[i].is_up:
-                n = math.floor(self.excitedList[i].z / self.simpar.sliceLength)
-                excited_per_slice[n] += 1
+        self.num_slices += new_layers
 
-        excited_density_up = list(map((lambda x: x * self.simpar.electrons_per_packet / self.simpar.sliceLength), excited_per_slice))
+        self.mu0List_up.extend([0.0] * new_layers)
+        self.mu0List_dn.extend([0.0] * new_layers)
 
-        return excited_density_up  # (nm^-3)
+        self.e_external: float = 0.0
 
-    def excited_density_dn(self):
-        excited_per_slice = [0] * self.num_slices
-        for i in range(len(self.excitedList)):
-            if not self.excitedList[i].is_up:
-                n = math.floor(self.excitedList[i].z / self.simpar.sliceLength)
-                excited_per_slice[n] += 1
+    def make_steps(self):
+        steps = []
+        z = 0.0
+        for n in range(self.num_slices):
+            steps.append(z)
+            z += self.h[n]
 
-        excited_density_dn = list(map((lambda x: x * self.simpar.electrons_per_packet / self.simpar.sliceLength), excited_per_slice))
+        return steps
 
-        return excited_density_dn  # (nm^-3)
+    def plot(self):
+        steps = self.make_steps()
+
+        plt.figure(figsize=(9, 9))
+
+        plt.plot(steps, self.mu0List_up, steps, self.mu0List_dn)
+        plt.ylabel("mu_0 (eV)")
+        plt.xlabel("z (nm)")
+        plt.axis([0, steps[self.num_slices-1], -1, 1])
+
+        plt.show()
+
+    def plot2(self):
+        steps = self.make_steps()
+        zmax = steps[len(steps) - 1]
+
+        fig, [ax1, ax2, ax3] = plt.subplots(3, 1, figsize=(10, 8))
+
+        ax1.set_xlim(0, zmax)
+        ax1.set_ylim(-0.2, 0.2)
+        ax1.set_ylabel("mu_0 \n (eV)")
+        ax1.axhline(y=0, color='b')
+        ax1.plot(steps, self.mu0List_up, steps, self.mu0List_dn)
+
+        ax2.set_xlim(0, zmax)
+        ax2.set_ylim(-20.0, 20.0)
+        ax2.set_ylabel("V \n (eV)")
+        ax2.axhline(y=0, color='b')
+        ax2.plot(steps, self.potential())
+
+        ax3.set_xlim(0, zmax)
+        ax3.set_ylim(-1.0, 1.0)
+        ax3.set_ylabel("rho \n (e nm^-3)")
+        ax3.axhline(y=0, color='b')
+        ax3.plot(steps, self.charge_density())
+
+        plt.xlabel("depth (nm)")
+
+        plt.show()
 
     def electron_density(self):
-        excited_density = self.excited_density()
-
         electron_density = [0.0] * self.num_slices
-        for i in range(self.num_slices):
-            electron_density[i] = (self.syspar.Ds_up * self.mu0List_up[i] + self.syspar.Ds_dn * self.mu0List_dn[i]) + excited_density[i]
+        for n in range(self.num_slices):
+            electron_density[n] = (self.Ds_up[n] * self.mu0List_up[n] + self.Ds_dn[n] * self.mu0List_dn[n])
 
         return electron_density  # (nm^-3)
 
@@ -92,24 +136,29 @@ class SimulationState:
         charge_density = list(map((lambda x: x * electron_charge), electron_density))
         return charge_density  # (e nm^-3)
 
-    def electric_field_intersite(self):
+    def electric_field(self):
         # electric field on the interface between slice [n] and [n+1]
-        charge_density = self.charge_density()
+        rho = self.charge_density()
 
         e_x = [0.0] * (self.num_slices - 1)
 
-        e_x[0] = charge_density[0] * self.simpar.sliceLength / epsilon_0
-        for i in range(1, self.num_slices - 1):
-            e_x[i] = e_x[i - 1] + charge_density[i] * self.simpar.sliceLength / epsilon_0
+        e_x[0] = rho[0] * self.h[0] / epsilon_0
+        for n in range(self.num_slices - 2):
+            e_x[n+1] = e_x[n] + self.h[n+1] * rho[n+1] / epsilon_0
+
+        # shifts the electric field such that no external electric field is applied
+        correction = - 0.5 * e_x[self.num_slices - 2]
+        for i in range(self.num_slices - 1):
+            e_x[i] += correction + self.e_external
 
         return e_x  # (eV nm^-1 e^-1)
 
     def potential(self):
-        electric_field_is = self.electric_field_intersite()
+        electric_field_is = self.electric_field()
         potential = [0.0] * self.num_slices
 
-        for i in range(self.num_slices-1):
-            potential[i + 1] = potential[i] - electric_field_is[i] * self.simpar.sliceLength
+        for n in range(self.num_slices-1):
+            potential[n+1] = potential[n] - 0.5 * (self.h[n] + self.h[n+1]) * electric_field_is[n]
 
         return potential  # (eV e^-1)
 
@@ -117,8 +166,8 @@ class SimulationState:
         potential = self.potential()
         ec_potential = [0.0] * self.num_slices
 
-        for i in range(self.num_slices):
-            ec_potential[i] = self.mu0List_up[i] + electron_charge * potential[i]
+        for n in range(self.num_slices):
+            ec_potential[n] = self.mu0List_up[n] + electron_charge * potential[n]
 
         return ec_potential  # (eV)
 
@@ -126,232 +175,67 @@ class SimulationState:
         potential = self.potential()
         ec_potential = [0.0] * self.num_slices
 
-        for i in range(self.num_slices):
-            ec_potential[i] = self.mu0List_dn[i] + electron_charge * potential[i]
+        for n in range(self.num_slices):
+            ec_potential[n] = self.mu0List_dn[n] + electron_charge * potential[n]
 
         return ec_potential  # (eV)
 
-    def plot(self):
-        steps = [x * self.simpar.sliceLength for x in range(0, self.num_slices)]
-        excited_density_up = self.excited_density_up()
-        excited_density_dn = self.excited_density_dn()
-
-        plt.figure(figsize=(9, 9))
-
-        plt.subplot(211)
-        plt.plot(steps, self.mu0List_up, steps, list(map(lambda x: x / self.syspar.Ds_up, excited_density_up)))
-        plt.ylabel("mu_0_up (eV)")
-        plt.xlabel("z (nm)")
-        plt.axis([0, self.num_slices * self.simpar.sliceLength, -0.1, 0.1])
-
-        plt.subplot(212)
-        plt.plot(steps, self.mu0List_dn, steps, list(map(lambda x: x / self.syspar.Ds_dn, excited_density_dn)))
-        plt.ylabel("mu_0_dn (eV)")
-        plt.xlabel("z (nm)")
-        plt.axis([0, self.num_slices * self.simpar.sliceLength, -0.1, 0.1])
-
-        plt.show()
-
-    def extra_electrons_up(self) -> float:
-        # calculates the number of excess electrons to check if conservation laws are met
-
-        num_excited = 0.0
-        for i in range(len(self.excitedList)):
-            if self.excitedList[i].is_up:
-                num_excited += 1
-
-        mu_accumulated = 0.0
-        for i in range(self.num_slices):
-            mu_accumulated += self.mu0List_up[i]
-
-        return num_excited * self.simpar.electrons_per_packet + self.simpar.sliceLength * mu_accumulated * self.syspar.Ds_up  # (nm^-2)
-
-    def extra_electrons_dn(self) -> float:
-        # calculates the number of excess electrons to check if conservation laws are met
-
-        num_excited = 0.0
-        for i in range(len(self.excitedList)):
-            if not self.excitedList[i].is_up:
-                num_excited += 1
-
-        mu_accumulated = 0.0
-        for i in range(self.num_slices):
-            mu_accumulated += self.mu0List_dn[i]
-
-        return num_excited * self.simpar.electrons_per_packet + self.simpar.sliceLength * mu_accumulated * self.syspar.Ds_dn  # (nm^-2)
-
-    def extra_electrons(self) -> float:
-        return self.extra_electrons_up() + self.extra_electrons_dn()
-
-    def advance(self, time: float, power: float):
-        accumulator = self
-
-        for _i in range(math.floor(time / self.simpar.dt)):
-            accumulator = accumulator.step(power)
-
-        return accumulator
-
-    def step(self, fluence: float):
-        # for brevity
+    def step(self):
         num_slices = self.num_slices
-        sliceLength = self.simpar.sliceLength
 
-        # make a new SimulationState for writing the result into
-        result = SimulationState()
-        result.simpar = self.simpar
-        result.syspar = self.syspar
-        result.num_slices = num_slices
-        result.mu0List_up = self.mu0List_up.copy()
-        result.mu0List_dn = self.mu0List_dn.copy()
-        result.excitedList = []
-        result.spin_current = [0.0] * num_slices
+        electric_field = self.electric_field()
 
-        # TRANSPORT OF THERMALISED ELECTRONS ---------------------------------------------------------------------------
-        # The value in self.muList are used to calculate how many electrons to transport,
-        # conservation of energy uses the values in result.muList .
-        # Because for every slice transport to the left is evaluated before transport to the right,
-        # this may break symmetry slightly but is a compromise to achieve conservation of energy.
+        J_up: list = [0.0] * (num_slices - 1)
+        J_dn: list = [0.0] * (num_slices - 1)
 
-        electric_field_is = self.electric_field_intersite()
+        for n in range(num_slices - 1):
+            J_up[n] = \
+                self.alpha_up[n] * (self.mu0List_up[n + 1] - self.mu0List_up[n]) + \
+                self.beta_up[n] * electric_field[n]
+            J_dn[n] = \
+                self.alpha_dn[n] * (self.mu0List_dn[n + 1] - self.mu0List_dn[n]) + \
+                self.beta_dn[n] * electric_field[n]
 
-        for i in range(0, num_slices-1):
-            # both types of transport in units of (nm^-3)
+        dNup_dt = [0.0] * num_slices
+        dNdn_dt = [0.0] * num_slices
 
-            # up
-            transport_diffusive_up = (self.syspar.Ds_up / self.syspar.Ds) * \
-                self.simpar.dt * self.syspar.electric_conductivity_diffusive * \
-                (self.mu0List_up[i] - self.mu0List_up[i + 1]) / (sliceLength * sliceLength)
-            transport_driven_up = (self.syspar.Ds_up / self.syspar.Ds) * self.syspar.electric_conductivity_driven * \
-                electron_charge * electric_field_is[i] * self.simpar.dt / sliceLength
+        for n in range(num_slices):
+            dNup_dt[n] += (self.mu0List_dn[n] - self.mu0List_up[n]) / self.tau_sf[n]
+            dNdn_dt[n] += (self.mu0List_up[n] - self.mu0List_dn[n]) / self.tau_sf[n]
 
-            transport_up = transport_diffusive_up + transport_driven_up  # (nm^-3)
+        for n in range(1, num_slices):
+            dNup_dt[n] += J_up[n - 1] / self.h[n]
+            dNdn_dt[n] += J_dn[n - 1] / self.h[n]
 
-            result.mu0List_up[i] = result.mu0List_up[i] - transport_up / self.syspar.Ds_up
-            result.mu0List_up[i + 1] = result.mu0List_up[i + 1] + transport_up / self.syspar.Ds_up
+        for n in range(0, num_slices - 1):
+            dNup_dt[n] -= J_up[n] / self.h[n]
+            dNdn_dt[n] -= J_dn[n] / self.h[n]
 
-            spin_current_up = transport_up * sliceLength / self.simpar.dt
+        for n in range(num_slices):
+            self.mu0List_up[n] += self.dt * dNup_dt[n] / self.Ds_up[n]
+            self.mu0List_dn[n] += self.dt * dNdn_dt[n] / self.Ds_dn[n]
 
-            result.spin_current[i] += 0.5 * spin_current_up
-            result.spin_current[i + 1] += 0.5 * spin_current_up
-
-            # dn
-            transport_diffusive_dn = (self.syspar.Ds_dn / self.syspar.Ds) * \
-                self.simpar.dt * self.syspar.electric_conductivity_diffusive * \
-                (self.mu0List_dn[i] - self.mu0List_dn[i + 1]) / (sliceLength * sliceLength)
-            transport_driven_dn = (self.syspar.Ds_dn / self.syspar.Ds) * self.syspar.electric_conductivity_driven * \
-                electron_charge * electric_field_is[i] * self.simpar.dt / sliceLength
-
-            transport_dn = transport_diffusive_dn + transport_driven_dn  # (nm^-3)
-
-            result.mu0List_dn[i] = result.mu0List_dn[i] - transport_dn / self.syspar.Ds_dn
-            result.mu0List_dn[i + 1] = result.mu0List_dn[i + 1] + transport_dn / self.syspar.Ds_dn
-
-            spin_current_dn = -transport_dn * sliceLength / self.simpar.dt
-
-            result.spin_current[i] += 0.5 * spin_current_dn
-            result.spin_current[i + 1] += 0.5 * spin_current_dn
-
-        # BALLISTIC TRANSPORT OF NON-THERMAL ELECTRONS -----------------------------------------------------------------
-        excited_list = []
-        for i in range(len(self.excitedList)):
-            current_electron = self.excitedList[i]
-            new_electron = ExcitedElectron()
-
-            new_electron.z = current_electron.z + current_electron.vz
-            new_electron.vz = current_electron.vz
-            new_electron.is_up = current_electron.is_up
-
-            initial_slice: int = math.floor(current_electron.z / sliceLength)
-
-            if new_electron.z < 0.0:
-                new_electron.z = -new_electron.z
-                new_electron.vz = -new_electron.vz
-            if new_electron.z > num_slices * sliceLength:
-                new_electron.z = 2 * num_slices * sliceLength - new_electron.z
-                new_electron.vz = -new_electron.vz
-
-            final_slice: int = math.floor(new_electron.z / sliceLength)
-
-            # contribute to spin current
-            # the sign is taken care of by the factor spin / (final_slice - initial_slice)
-            for n in range(min(initial_slice, final_slice), max(initial_slice, final_slice)):
-                if current_electron.is_up:
-                    spin = 1
-                else:
-                    spin = -1
-                self.spin_current[n] += spin * self.simpar.electrons_per_packet / (final_slice - initial_slice) / self.simpar.dt
-
-            excited_list.append(new_electron)
-
-        # DECAY OF NON-THERMAL ELECTRONS -------------------------------------------------------------------------------
-        p_decay_up = 1.0 - math.exp(-self.simpar.dt / self.syspar.tau_ee_up)  # probability of a given nonequilibrium electron thermalising
-        p_decay_dn = 1.0 - math.exp(-self.simpar.dt / self.syspar.tau_ee_dn)  # probability of a given nonequilibrium electron thermalising
-        for i in range(len(excited_list)):
-            if (excited_list[i].is_up and random.random() < p_decay_up) or \
-                    ((not excited_list[i].is_up) and random.random() < p_decay_dn):
-                n: int = math.floor(excited_list[i].z / sliceLength)
-                if excited_list[i].is_up:
-                    result.mu0List_up[n] += self.simpar.electrons_per_packet / (self.syspar.Ds_up * sliceLength)
-                else:
-                    result.mu0List_dn[n] += self.simpar.electrons_per_packet / (self.syspar.Ds_dn * sliceLength)
-            else:
-                result.excitedList.append(excited_list[i])
-
-        # EXCITATION OF NON-THERMAL ELECTRONS --------------------------------------------------------------------------
-        for i in range(num_slices):
-
-            p_i = fluence * (
-                    math.exp(-i * sliceLength / self.syspar.penetration_depth) -
-                    math.exp(-(i+1) * sliceLength / self.syspar.penetration_depth)
-            )  # (eV fs^-1 nm^-2)
-
-            # for simplicity assuming mu approximately 0
-            num_excitations_i = p_i * self.simpar.dt / self.syspar.E_nt / self.simpar.electrons_per_packet  # (1)
-
-            num_excitations_i_up = round(num_excitations_i * self.syspar.Ds_up / self.syspar.Ds)
-            num_excitations_i_dn = round(num_excitations_i * self.syspar.Ds_dn / self.syspar.Ds)
-
-            result.mu0List_up[i] -= \
-                num_excitations_i_up * self.simpar.electrons_per_packet / (self.syspar.Ds_up * sliceLength)
-            result.mu0List_dn[i] -= \
-                num_excitations_i_dn * self.simpar.electrons_per_packet / (self.syspar.Ds_dn * sliceLength)
-
-            for j in range(num_excitations_i_up):
-                new_electron = ExcitedElectron()
-
-                new_electron.z = sliceLength * (i + random.random())
-                new_electron.vz = self.syspar.v_fermi * (2.0 * random.random() - 1)
-                new_electron.is_up = True
-
-                result.excitedList.append(new_electron)
-
-            for j in range(num_excitations_i_dn):
-                new_electron = ExcitedElectron()
-
-                new_electron.z = sliceLength * (i + random.random())
-                new_electron.vz = self.syspar.v_fermi * (2.0 * random.random() - 1)
-                new_electron.is_up = False
-
-                result.excitedList.append(new_electron)
-
-        return result
-
-
-def make_equilibrium(system_parameters, simulation_parameters) -> SimulationState:
-    num_slices = math.floor(system_parameters.length / simulation_parameters.sliceLength)
-
+def single_layer(material, layer_thickness):
     result = SimulationState()
 
-    result.syspar = system_parameters
-    result.simpar = simulation_parameters
+    new_layers = math.ceil(layer_thickness / target_sliceWidth)
+    sliceWidth = layer_thickness / new_layers
 
-    result.num_slices = num_slices
+    # slice properties
+    result.h.extend([sliceWidth] * new_layers)
+    result.Ds_up.extend([material.Ds_up] * new_layers)
+    result.Ds_dn.extend([material.Ds_dn] * new_layers)
+    result.tau_sf.extend([material.tau_sf] * new_layers)
 
-    result.mu0List_up = [0.0] * num_slices
-    result.mu0List_dn = [0.0] * num_slices
+    # bulk interface properties
+    result.alpha_up.extend([-material.conductivity_up / sliceWidth] * (new_layers-1))
+    result.alpha_dn.extend([-material.conductivity_dn / sliceWidth] * (new_layers-1))
+    result.beta_up.extend([-material.conductivity_up * e] * (new_layers-1))
+    result.beta_dn.extend([-material.conductivity_dn * e] * (new_layers-1))
 
-    result.excitedList = []
+    result.num_slices += new_layers
 
-    result.spin_current = [0.0] * num_slices
+    result.mu0List_up.extend([0.0] * new_layers)
+    result.mu0List_dn.extend([0.0] * new_layers)
 
     return result
